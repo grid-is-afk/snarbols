@@ -47,7 +47,7 @@ export const DragButton = () => {
               </p>
               <p className="text-sm font-medium text-muted-foreground">
                 Once you complete your purchase, you'll receive a license key
-                via email. Paste in the Settings → Pluely Access section to
+                via email. Paste in the Settings → Snarbols Access section to
                 activate.
               </p>
             </div>
@@ -63,7 +63,7 @@ export const DragButton = () => {
       variant="ghost"
       size="icon"
       className={`-ml-[2px] w-fit`}
-      aria-label="Drag to move Pluely window"
+      aria-label="Drag to move Snarbols window"
       data-tauri-drag-region={hasActiveLicense}
     >
       <GripVerticalIcon className="h-4 w-4" />
