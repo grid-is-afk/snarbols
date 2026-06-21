@@ -1,8 +1,9 @@
 name: release
 
-# Builds Snarbols desktop installers for macOS, Windows, and Linux and
-# publishes them to a GitHub Release. Trigger by pushing a v* tag, or
-# manually via the Actions tab / `gh workflow run`.
+# Builds Snarbols desktop installers (macOS/Windows/Linux) and publishes them
+# to a single GitHub Release. Uses the create -> build -> publish pattern so
+# parallel matrix jobs upload to the SAME pre-created release (no asset race).
+# Trigger by pushing a v* tag, or manually via Actions / `gh workflow run`.
 on:
   push:
     tags:
@@ -18,7 +19,36 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  create-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/github-script@v7
+        id: create
+        with:
+          result-encoding: string
+          script: |
+            const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Snarbols ${tag}`,
+              draft: true,
+              prerelease: false,
+              body: [
+                "Snarbols desktop builds. Download the installer for your platform below.",
+                "",
+                "⚠️ These are **unsigned** builds. On first launch:",
+                "- **Windows**: SmartScreen → \"More info\" → \"Run anyway\".",
+                "- **macOS**: right-click the app → \"Open\" (Gatekeeper).",
+              ].join("\n"),
+            });
+            return data.id.toString();
+
+  build-tauri:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -60,21 +90,24 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build & release
+      - name: Build & upload to release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: "Snarbols ${{ github.event.inputs.tag || github.ref_name }}"
-          releaseBody: |
-            Snarbols desktop builds. Download the installer for your platform below.
-
-            ⚠️ These are **unsigned** builds. On first launch:
-            - **Windows**: SmartScreen → "More info" → "Run anyway".
-            - **macOS**: right-click the app → "Open" (Gatekeeper).
-
-            Snarbols is GPL-3.0 free software, a fork of Pluely by Srikanth Nani.
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  publish-release:
+    needs: [create-release, build-tauri]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false,
+            });
