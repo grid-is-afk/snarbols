@@ -49,8 +49,6 @@ const validateAndProcessCurlProviders = (
         } catch (e) {
           return false;
         }
-
-        return true;
       })
       .map((p) => {
         const provider = { ...p, isCustom: true };

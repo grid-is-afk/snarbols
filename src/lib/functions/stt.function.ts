@@ -203,7 +203,9 @@ export async function fetchSTT(params: STTParams): Promise<string> {
       let errText = "";
       try {
         errText = await response.text();
-      } catch {}
+      } catch {
+        // Best-effort: error body may be unreadable; fall back to status text.
+      }
       let errMsg: string;
       try {
         const errObj = JSON.parse(errText);

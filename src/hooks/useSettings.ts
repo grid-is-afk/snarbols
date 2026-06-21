@@ -71,7 +71,7 @@ export const useSettings = () => {
         setVariables(variables);
       }
     }
-  }, [selectedAIProvider.provider]);
+  }, [selectedAIProvider.provider, allAiProviders]);
 
   useEffect(() => {
     if (selectedSttProvider.provider) {
@@ -83,7 +83,7 @@ export const useSettings = () => {
         setSttVariables(variables);
       }
     }
-  }, [selectedSttProvider.provider]);
+  }, [selectedSttProvider.provider, allSttProviders]);
 
   const handleDeleteAllChatsConfirm = async () => {
     try {
