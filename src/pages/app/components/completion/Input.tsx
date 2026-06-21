@@ -147,6 +147,13 @@ export const Input = ({
                     ? "Close and start new conversation"
                     : "Clear conversation"
                 }
+                aria-label={
+                  isLoading
+                    ? "Cancel loading"
+                    : keepEngaged
+                    ? "Close and start new conversation"
+                    : "Clear conversation"
+                }
               >
                 <XIcon />
               </Button>

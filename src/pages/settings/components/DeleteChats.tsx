@@ -58,9 +58,21 @@ export const DeleteChats = ({
 
       {/* Confirmation Dialog */}
       {showDeleteConfirmDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background border rounded-lg p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-2">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setShowDeleteConfirmDialog(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-all-chats-title"
+            className="bg-background border rounded-lg p-6 max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              id="delete-all-chats-title"
+              className="text-lg font-semibold mb-2"
+            >
               Delete All Chat History
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
