@@ -319,7 +319,9 @@ export async function* fetchAIResponse(params: {
       let errorText = "";
       try {
         errorText = await response.text();
-      } catch {}
+      } catch {
+        // Best-effort: error body may be unreadable; fall back to status text.
+      }
       yield `API request failed: ${response.status} ${response.statusText}${
         errorText ? ` - ${errorText}` : ""
       }`;

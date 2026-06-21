@@ -34,9 +34,7 @@ export function addCustomAiProvider(
 ): TYPE_PROVIDER | null {
   try {
     const providers = getCustomAiProviders();
-    const id = `custom-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
+    const id = `custom-${crypto.randomUUID()}`;
     const provider: TYPE_PROVIDER = {
       ...newProvider,
       id,
