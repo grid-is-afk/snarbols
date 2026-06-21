@@ -10,7 +10,7 @@ import { TYPE_PROVIDER } from "@/types";
 import curl2Json from "@bany/curl-to-json";
 import { shouldUsePluelyAPI } from "./pluely.api";
 
-// Pluely STT function
+// Snarbols STT function
 async function fetchPluelySTT(audio: File | Blob): Promise<string> {
   try {
     // Convert audio to base64
@@ -32,7 +32,7 @@ async function fetchPluelySTT(audio: File | Blob): Promise<string> {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return `Pluely STT Error: ${errorMessage}`;
+    return `Snarbols STT Error: ${errorMessage}`;
   }
 }
 
@@ -54,7 +54,7 @@ export async function fetchSTT(params: STTParams): Promise<string> {
   try {
     const { provider, selectedProvider, audio } = params;
 
-    // Check if we should use Pluely API instead
+    // Check if we should use Snarbols API instead
     const usePluelyAPI = await shouldUsePluelyAPI();
     if (usePluelyAPI) {
       return await fetchPluelySTT(audio);
