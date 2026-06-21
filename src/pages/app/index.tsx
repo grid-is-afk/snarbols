@@ -72,6 +72,7 @@ const App = () => {
               size={"icon"}
               className="cursor-pointer"
               title="Open Dev Space"
+              aria-label="Open Dev Space"
               onClick={openDashboard}
             >
               <SparklesIcon className="h-4 w-4" />
