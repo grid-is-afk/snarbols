@@ -16,13 +16,26 @@ export const validateCurl = (
     };
   }
 
+  let parsed: { url?: string };
   try {
-    curl2Json(curl);
+    parsed = curl2Json(curl);
   } catch (error) {
     return {
       isValid: false,
       message:
         "Invalid cURL command syntax. Please check for typos or try validating it on an online tool like reqbin.com/curl-online.",
+    };
+  }
+
+  // Only allow http(s) endpoints. Blocks javascript:, file:, data:, etc.,
+  // which could otherwise be smuggled in via a custom provider cURL and
+  // executed/read as a request target.
+  const url = (parsed?.url ?? "").trim();
+  if (url && !/^https?:\/\//i.test(url)) {
+    return {
+      isValid: false,
+      message:
+        "The request URL must use http:// or https://. Other schemes are not allowed.",
     };
   }
 
