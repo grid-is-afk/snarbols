@@ -8,18 +8,14 @@ import {
   MonitorIcon,
   HomeIcon,
   PowerIcon,
-  MailIcon,
-  CoffeeIcon,
   GlobeIcon,
   BugIcon,
   MessageSquareTextIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useApp } from "@/contexts";
-import { XIcon, GithubIcon } from "@/components";
+import { GithubIcon } from "@/components";
 
 export const useMenuItems = () => {
-  const { hasActiveLicense } = useApp();
 
   const menu: {
     icon: React.ElementType;
@@ -76,23 +72,14 @@ export const useMenuItems = () => {
   ];
 
   const footerItems = [
-    ...(hasActiveLicense
-      ? [
-          {
-            icon: MailIcon,
-            label: "Contact Support",
-            href: "mailto:support@pluely.com",
-          },
-        ]
-      : []),
     {
       icon: BugIcon,
       label: "Report a bug",
-      href: "https://github.com/iamsrikanthnani/pluely/issues/new?template=bug-report.yml",
+      href: "https://github.com/grid-is-afk/snarbols/issues/new",
     },
     {
       icon: PowerIcon,
-      label: "Quit pluely",
+      label: "Quit Snarbols",
       action: async () => {
         await invoke("exit_app");
       },
@@ -107,22 +94,12 @@ export const useMenuItems = () => {
     {
       title: "Website",
       icon: GlobeIcon,
-      link: "https://pluely.com",
+      link: "https://snarbols-site-production-3dea.up.railway.app",
     },
     {
       title: "Github",
       icon: GithubIcon,
-      link: "https://github.com/iamsrikanthnani/pluely",
-    },
-    {
-      title: "Buy Me a Coffee",
-      icon: CoffeeIcon,
-      link: "https://buymeacoffee.com/srikanthnani",
-    },
-    {
-      title: "Follow on X",
-      icon: XIcon,
-      link: "https://x.com/srikanthnani",
+      link: "https://github.com/grid-is-afk/snarbols",
     },
   ];
 
