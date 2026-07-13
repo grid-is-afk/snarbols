@@ -1,60 +1,32 @@
-import React from "react";
-import { Streamdown } from "streamdown";
-import "katex/dist/katex.min.css";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import React, { Suspense } from "react";
 
 interface MarkdownRendererProps {
   children: string;
   isStreaming?: boolean;
 }
 
+// Lazy-load the heavy Streamdown renderer (shiki + mermaid + katex) so it is
+// code-split out of the initial bundle and only fetched the first time markdown
+// is actually rendered (i.e. when an AI response appears).
+const StreamdownRenderer = React.lazy(
+  () => import("./streamdown-renderer")
+);
+
 export function Markdown({
   children,
   isStreaming = false,
 }: MarkdownRendererProps) {
   return (
-    <Streamdown
-      isAnimating={isStreaming}
-      shikiTheme={["github-light", "github-dark"]}
-      components={COMPONENTS as any}
-      controls={{
-        table: true,
-        code: true,
-        mermaid: {
-          download: true,
-          copy: true,
-          fullscreen: false,
-          panZoom: false,
-        },
-      }}
+    <Suspense
+      fallback={
+        // Plain-text fallback keeps streaming content visible (and layout
+        // stable) during the brief lazy-chunk fetch — no blank flash.
+        <div className="whitespace-pre-wrap break-words">{children}</div>
+      }
     >
-      {children}
-    </Streamdown>
+      <StreamdownRenderer isStreaming={isStreaming}>
+        {children}
+      </StreamdownRenderer>
+    </Suspense>
   );
 }
-
-const COMPONENTS = {
-  a: ({ children, href, ...props }: any) => {
-    const handleClick = async (e: React.MouseEvent) => {
-      e.preventDefault();
-      if (href) {
-        try {
-          await openUrl(href);
-        } catch (error) {
-          console.error("Failed to open URL:", error);
-        }
-      }
-    };
-
-    return (
-      <a
-        href={href}
-        className="text-gray-600 underline underline-offset-2 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100 cursor-pointer"
-        onClick={handleClick}
-        {...props}
-      >
-        {children}
-      </a>
-    );
-  },
-};
