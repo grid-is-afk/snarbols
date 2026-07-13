@@ -1,66 +1,95 @@
-import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { GetLicense } from "@/components";
-import { PluelyApiSetup, Usage } from "./components";
+import { useNavigate } from "react-router-dom";
+import {
+  KeyRoundIcon,
+  KeyboardIcon,
+  EyeOffIcon,
+  ShieldCheckIcon,
+  ArrowRight,
+} from "lucide-react";
+import { Button } from "@/components";
 import { PageLayout } from "@/layouts";
-import { useApp } from "@/contexts";
+
+const FEATURES = [
+  {
+    icon: EyeOffIcon,
+    title: "Invisible overlay",
+    desc: "Stays hidden in screen shares and recordings.",
+  },
+  {
+    icon: ShieldCheckIcon,
+    title: "Private by design",
+    desc: "Requests go straight from your machine to your provider.",
+  },
+  {
+    icon: KeyboardIcon,
+    title: "Summon with a hotkey",
+    desc: "Ask, screenshot, or transcribe from anywhere.",
+  },
+];
 
 const Dashboard = () => {
-  const { hasActiveLicense } = useApp();
-  const [activity, setActivity] = useState<any>(null);
-  const [loadingActivity, setLoadingActivity] = useState(false);
-
-  const fetchActivity = useCallback(async () => {
-    if (!hasActiveLicense) {
-      setActivity({ data: [], total_tokens_used: 0 });
-      return;
-    }
-    setLoadingActivity(true);
-    try {
-      const response = await invoke("get_activity");
-      const responseData: any = response;
-      if (responseData && responseData.success) {
-        setActivity(responseData);
-      } else {
-        setActivity({ data: [], total_tokens_used: 0 });
-      }
-    } catch (error) {
-      setActivity({ data: [], total_tokens_used: 0 });
-    } finally {
-      setLoadingActivity(false);
-    }
-  }, [hasActiveLicense]);
-
-  useEffect(() => {
-    if (hasActiveLicense) {
-      fetchActivity();
-    } else {
-      setActivity(null);
-    }
-  }, [fetchActivity, hasActiveLicense]);
-
-  const activityData =
-    activity && Array.isArray(activity.data) ? activity.data : [];
-  const totalTokens =
-    activity && typeof activity.total_tokens_used === "number"
-      ? activity.total_tokens_used
-      : 0;
+  const navigate = useNavigate();
 
   return (
     <PageLayout
-      title="Dashboard"
-      description="Snarbols license to unlock faster responses, quicker support and premium features."
-      rightSlot={!hasActiveLicense ? <GetLicense /> : null}
+      title="Welcome to Snarbols"
+      description="Your private, on-device AI assistant. No account, no subscription — bring your own API key and you're ready."
     >
-      {/* Snarbols API Setup */}
-      <PluelyApiSetup />
+      {/* Get started */}
+      <div className="rounded-xl border border-input/50 bg-card/60 p-5">
+        <h2 className="text-base font-semibold">Get started in two steps</h2>
+        <ol className="mt-4 space-y-4">
+          <li className="flex gap-3">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
+              1
+            </span>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Add your AI provider</p>
+              <p className="text-sm text-muted-foreground">
+                Open Dev Space and paste your own OpenAI, Anthropic, or other
+                API key. It's stored locally on this device.
+              </p>
+              <Button
+                size="sm"
+                className="mt-2 gap-1.5"
+                onClick={() => navigate("/dev-space")}
+              >
+                <KeyRoundIcon className="size-4" />
+                Set up a provider
+                <ArrowRight className="size-4" />
+              </Button>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
+              2
+            </span>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Summon Snarbols</p>
+              <p className="text-sm text-muted-foreground">
+                Use your hotkey to bring up the input, then ask away. Configure
+                shortcuts under Cursor &amp; Shortcuts.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </div>
 
-      <Usage
-        loading={loadingActivity}
-        onRefresh={fetchActivity}
-        data={activityData}
-        totalTokens={totalTokens}
-      />
+      {/* Feature highlights */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {FEATURES.map(({ icon: Icon, title, desc }) => (
+          <div
+            key={title}
+            className="rounded-xl border border-input/50 bg-card/40 p-4"
+          >
+            <div className="mb-2 grid size-9 place-items-center rounded-lg border border-input/50 bg-background">
+              <Icon className="size-4 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">{title}</p>
+            <p className="text-xs text-muted-foreground">{desc}</p>
+          </div>
+        ))}
+      </div>
     </PageLayout>
   );
 };
