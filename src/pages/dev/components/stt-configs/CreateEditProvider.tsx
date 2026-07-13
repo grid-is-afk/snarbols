@@ -213,6 +213,12 @@ export const CreateEditProvider = ({
             />
           </div>
 
+          {errors.submit && (
+            <p role="alert" className="text-xs text-red-500 -mt-1">
+              {errors.submit}
+            </p>
+          )}
+
           <div className="flex justify-end gap-2 -mt-3">
             <Button
               variant="outline"

@@ -3,12 +3,16 @@ import {
   AlwaysOnTopToggle,
   AppIconToggle,
   AutostartToggle,
+  VaultStatusBanner,
 } from "./components";
 import { PageLayout } from "@/layouts";
 
 const Settings = () => {
   return (
     <PageLayout title="Settings" description="Manage your settings">
+      {/* Secure-storage warning (only renders in passthrough mode) */}
+      <VaultStatusBanner />
+
       {/* Theme */}
       <Theme />
 

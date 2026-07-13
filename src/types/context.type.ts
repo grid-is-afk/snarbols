@@ -39,7 +39,7 @@ export type IContextType = {
   toggleAppIconVisibility: (isVisible: boolean) => Promise<void>;
   toggleAlwaysOnTop: (isEnabled: boolean) => Promise<void>;
   toggleAutostart: (isEnabled: boolean) => Promise<void>;
-  loadData: () => void;
+  loadData: () => Promise<void>;
   hasActiveLicense: boolean;
   setHasActiveLicense: Dispatch<SetStateAction<boolean>>;
   getActiveLicenseStatus: () => Promise<void>;
@@ -56,4 +56,17 @@ export type IContextType = {
   setCursorType: (type: CursorType) => void;
   supportsImages: boolean;
   setSupportsImages: (value: boolean) => void;
+  /**
+   * Whether the OS encryption-at-rest keychain is available. `false` means the
+   * app is running in passthrough mode (API keys stored unencrypted).
+   */
+  vaultAvailable: boolean;
+  /**
+   * Whether at least one already-encrypted (`enc:v1:`) value failed to decrypt
+   * on the last load — i.e. the OS secure storage changed and previously-saved
+   * API keys can no longer be unlocked. Distinct from `vaultAvailable === false`
+   * (passthrough): the vault reports available, but our own data won't open, so
+   * the user must re-enter their keys.
+   */
+  vaultDecryptError: boolean;
 };

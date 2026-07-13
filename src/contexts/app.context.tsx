@@ -5,7 +5,15 @@ import {
   STORAGE_KEYS,
 } from "@/config";
 import { getPlatform, safeLocalStorage } from "@/lib";
-import { getShortcutsConfig } from "@/lib/storage";
+import {
+  getShortcutsConfig,
+  decryptValue,
+  encryptValue,
+  isVaultAvailable,
+  isVaultOwnerWindow,
+  migrateSecretsToVault,
+  ENC_PREFIX,
+} from "@/lib/storage";
 import {
   getCustomizableState,
   setCustomizableState,
@@ -58,10 +66,24 @@ const validateAndProcessCurlProviders = (
         return provider;
       });
   } catch (e) {
-    console.warn(`Failed to parse custom ${providerType} providers`, e);
+    // NEVER log the raw error/object here: this runs downstream of a successful
+    // decrypt, so a JSON.parse SyntaxError message can embed a fragment of the
+    // decrypted secret. Log only the error name.
+    console.warn(
+      `Failed to parse custom ${providerType} providers:`,
+      e instanceof Error ? e.name : "unknown error"
+    );
     return [];
   }
 };
+
+// Secret-bearing localStorage keys protected by the encryption-at-rest vault.
+const SECRET_STORAGE_KEYS: string[] = [
+  STORAGE_KEYS.CUSTOM_AI_PROVIDERS,
+  STORAGE_KEYS.CUSTOM_SPEECH_PROVIDERS,
+  STORAGE_KEYS.SELECTED_AI_PROVIDER,
+  STORAGE_KEYS.SELECTED_STT_PROVIDER,
+];
 
 // Create the context
 const AppContext = createContext<IContextType | undefined>(undefined);
@@ -129,6 +151,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [customizable, setCustomizable] = useState<CustomizableState>(
     DEFAULT_CUSTOMIZABLE_STATE
   );
+  // Encryption-at-rest vault availability. Defaults to `true` so the warning
+  // banner never flashes before the async probe resolves; set to `false` only
+  // when the OS keychain is confirmed unavailable (passthrough mode).
+  const [vaultAvailable, setVaultAvailable] = useState<boolean>(true);
+  // True when at least one already-encrypted (`enc:v1:`) blob failed to decrypt
+  // on the last load — i.e. the keychain changed and previously-saved keys can
+  // no longer be unlocked. Distinct from `vaultAvailable === false`
+  // (passthrough): here the vault reports available but our OWN data won't open,
+  // so the user must re-enter their keys. The still-encrypted blobs are left
+  // untouched so a repaired keychain could still recover them.
+  const [vaultDecryptError, setVaultDecryptError] = useState<boolean>(false);
+
   // Snarbols has no hosted license/Cloud. Treat the app as always "licensed"
   // so all features are unlocked; AI runs entirely on the user's own keys.
   const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(true);
@@ -166,7 +200,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [hasActiveLicense]);
 
   // Function to load AI, STT, system prompt and screenshot config data from storage
-  const loadData = () => {
+  const loadData = async () => {
     // One-time cleanup: drop the orphaned legacy Pluely-Cloud flag left over on
     // installs upgraded from before the de-Cloud pass. Nothing reads it anymore.
     safeLocalStorage.removeItem("pluely_api_enabled");
@@ -200,39 +234,85 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    // Load custom AI providers
-    const savedAi = safeLocalStorage.getItem(STORAGE_KEYS.CUSTOM_AI_PROVIDERS);
+    // Count failures to decrypt values that ARE encrypted (`enc:v1:` prefixed).
+    // A failure here means the keychain changed and previously-saved keys can no
+    // longer be unlocked — surfaced to the user via `vaultDecryptError`. We NEVER
+    // overwrite the still-encrypted blob on failure, so a repaired keychain can
+    // still recover it.
+    let decryptFailures = 0;
+
+    // Load custom AI providers (decrypt-at-rest; plaintext passes through)
+    const rawAi = safeLocalStorage.getItem(STORAGE_KEYS.CUSTOM_AI_PROVIDERS);
     let aiList: TYPE_PROVIDER[] = [];
-    if (savedAi) {
-      aiList = validateAndProcessCurlProviders(savedAi, "AI");
+    if (rawAi) {
+      try {
+        const savedAi = await decryptValue(rawAi);
+        aiList = validateAndProcessCurlProviders(savedAi, "AI");
+      } catch (error) {
+        if (rawAi.startsWith(ENC_PREFIX)) decryptFailures++;
+        // Log only the error name: a decrypt/parse error message can carry a
+        // fragment of the decrypted secret.
+        console.warn(
+          "Failed to decrypt custom AI providers:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
     }
     setCustomAiProviders(aiList);
 
-    // Load custom STT providers
-    const savedStt = safeLocalStorage.getItem(
+    // Load custom STT providers (decrypt-at-rest; plaintext passes through)
+    const rawStt = safeLocalStorage.getItem(
       STORAGE_KEYS.CUSTOM_SPEECH_PROVIDERS
     );
     let sttList: TYPE_PROVIDER[] = [];
-    if (savedStt) {
-      sttList = validateAndProcessCurlProviders(savedStt, "STT");
+    if (rawStt) {
+      try {
+        const savedStt = await decryptValue(rawStt);
+        sttList = validateAndProcessCurlProviders(savedStt, "STT");
+      } catch (error) {
+        if (rawStt.startsWith(ENC_PREFIX)) decryptFailures++;
+        console.warn(
+          "Failed to decrypt custom STT providers:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
     }
     setCustomSttProviders(sttList);
 
-    // Load selected AI provider
-    const savedSelectedAi = safeLocalStorage.getItem(
+    // Load selected AI provider (decrypt-at-rest; plaintext passes through)
+    const rawSelectedAi = safeLocalStorage.getItem(
       STORAGE_KEYS.SELECTED_AI_PROVIDER
     );
-    if (savedSelectedAi) {
-      setSelectedAIProvider(JSON.parse(savedSelectedAi));
+    if (rawSelectedAi) {
+      try {
+        setSelectedAIProvider(JSON.parse(await decryptValue(rawSelectedAi)));
+      } catch (error) {
+        if (rawSelectedAi.startsWith(ENC_PREFIX)) decryptFailures++;
+        console.warn(
+          "Failed to load selected AI provider:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
     }
 
-    // Load selected STT provider
-    const savedSelectedStt = safeLocalStorage.getItem(
+    // Load selected STT provider (decrypt-at-rest; plaintext passes through)
+    const rawSelectedStt = safeLocalStorage.getItem(
       STORAGE_KEYS.SELECTED_STT_PROVIDER
     );
-    if (savedSelectedStt) {
-      setSelectedSttProvider(JSON.parse(savedSelectedStt));
+    if (rawSelectedStt) {
+      try {
+        setSelectedSttProvider(JSON.parse(await decryptValue(rawSelectedStt)));
+      } catch (error) {
+        if (rawSelectedStt.startsWith(ENC_PREFIX)) decryptFailures++;
+        console.warn(
+          "Failed to load selected STT provider:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
     }
+
+    // Surface whether any encrypted blob failed to open this load.
+    setVaultDecryptError(decryptFailures > 0);
 
     // Load customizable state
     const customizableState = getCustomizableState();
@@ -302,13 +382,34 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Load data on mount
   useEffect(() => {
-    const initializeApp = async () => {
-      // Load license and data
+    const bootstrap = async () => {
+      // 1) Probe the vault, and — ONLY in the owner window — migrate any
+      //    plaintext secrets to encryption-at-rest BEFORE reading them back in
+      //    loadData. Restricting migration (and, in secure-vault, master-key
+      //    creation) to a single window prevents two windows from generating
+      //    divergent master keys and orphaning blobs (permanent key loss).
+      //    Non-owner windows only read/decrypt an existing key for display.
+      try {
+        const available = await isVaultAvailable();
+        setVaultAvailable(available);
+        if (isVaultOwnerWindow()) {
+          await migrateSecretsToVault(SECRET_STORAGE_KEYS);
+        }
+      } catch (error) {
+        console.warn(
+          "[secure-vault] bootstrap probe/migration failed:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
+
+      // 2) Load (and decrypt) all persisted data.
+      await loadData();
+
+      // 3) License/shortcuts init.
       await getActiveLicenseStatus();
     };
-    // Load data
-    loadData();
-    initializeApp();
+
+    bootstrap();
   }, []);
 
   // Handle customizable settings on state changes
@@ -427,24 +528,66 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [selectedAIProvider.provider]);
 
-  // Sync selected AI to localStorage
+  // Sync selected AI to localStorage (encrypt-at-rest)
   useEffect(() => {
-    if (selectedAIProvider.provider) {
-      safeLocalStorage.setItem(
-        STORAGE_KEYS.SELECTED_AI_PROVIDER,
-        JSON.stringify(selectedAIProvider)
-      );
-    }
+    if (!selectedAIProvider.provider) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const serialized = JSON.stringify(selectedAIProvider);
+        // Skip redundant writes (e.g. right after a load) so we don't thrash
+        // storage or ping-pong the cross-window `storage` sync.
+        const existing = safeLocalStorage.getItem(
+          STORAGE_KEYS.SELECTED_AI_PROVIDER
+        );
+        if (existing) {
+          const decoded = await decryptValue(existing).catch(() => null);
+          if (decoded === serialized) return;
+        }
+        const encrypted = await encryptValue(serialized);
+        if (!cancelled) {
+          safeLocalStorage.setItem(
+            STORAGE_KEYS.SELECTED_AI_PROVIDER,
+            encrypted
+          );
+        }
+      } catch (error) {
+        console.warn("[secure-vault] failed to persist selected AI provider", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedAIProvider]);
 
-  // Sync selected STT to localStorage
+  // Sync selected STT to localStorage (encrypt-at-rest)
   useEffect(() => {
-    if (selectedSttProvider.provider) {
-      safeLocalStorage.setItem(
-        STORAGE_KEYS.SELECTED_STT_PROVIDER,
-        JSON.stringify(selectedSttProvider)
-      );
-    }
+    if (!selectedSttProvider.provider) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const serialized = JSON.stringify(selectedSttProvider);
+        const existing = safeLocalStorage.getItem(
+          STORAGE_KEYS.SELECTED_STT_PROVIDER
+        );
+        if (existing) {
+          const decoded = await decryptValue(existing).catch(() => null);
+          if (decoded === serialized) return;
+        }
+        const encrypted = await encryptValue(serialized);
+        if (!cancelled) {
+          safeLocalStorage.setItem(
+            STORAGE_KEYS.SELECTED_STT_PROVIDER,
+            encrypted
+          );
+        }
+      } catch (error) {
+        console.warn("[secure-vault] failed to persist selected STT provider", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSttProvider]);
 
   // Computed all AI providers
@@ -578,6 +721,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCursorType,
     supportsImages,
     setSupportsImages,
+    vaultAvailable,
+    vaultDecryptError,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
