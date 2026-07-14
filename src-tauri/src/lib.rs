@@ -1,13 +1,10 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-mod activate;
-mod api;
 mod capture;
 mod db;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, WebviewWindow};
-use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
 use tokio::task::JoinHandle;
 mod speaker;
 use capture::CaptureState;
@@ -31,8 +28,6 @@ fn get_app_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Get PostHog API key
-    let posthog_api_key = option_env!("POSTHOG_API_KEY").unwrap_or("").to_string();
     let mut builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -52,19 +47,6 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_keychain::init())
         .plugin(tauri_plugin_shell::init()) // Add shell plugin
-        .plugin(posthog_init(PostHogConfig {
-            api_key: posthog_api_key,
-            options: Some(PostHogOptions {
-                // disable session recording
-                disable_session_recording: Some(true),
-                // disable pageview
-                capture_pageview: Some(false),
-                // disable pageleave
-                capture_pageleave: Some(false),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }))
         .plugin(tauri_plugin_machine_uid::init());
     #[cfg(target_os = "macos")]
     {
@@ -89,21 +71,6 @@ pub fn run() {
             shortcuts::set_app_icon_visibility,
             shortcuts::set_always_on_top,
             shortcuts::exit_app,
-            activate::activate_license_api,
-            activate::deactivate_license_api,
-            activate::validate_license_api,
-            activate::mask_license_key_cmd,
-            activate::get_checkout_url,
-            activate::secure_storage_save,
-            activate::secure_storage_get,
-            activate::secure_storage_remove,
-            api::transcribe_audio,
-            api::chat_stream_response,
-            api::fetch_models,
-            api::fetch_prompts,
-            api::create_system_prompt,
-            api::check_license_status,
-            api::get_activity,
             speaker::start_system_audio_capture,
             speaker::stop_system_audio_capture,
             speaker::manual_stop_continuous,

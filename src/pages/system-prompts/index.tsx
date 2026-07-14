@@ -133,20 +133,6 @@ const SystemPrompts = () => {
   };
 
   /**
-   * Handle AI generation
-   */
-  const handleGenerate = (
-    generatedPrompt: string,
-    generatedPromptName: string
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      prompt: generatedPrompt,
-      name: generatedPromptName,
-    }));
-  };
-
-  /**
    * Handle selecting a prompt card
    */
   const handleCardClick = (promptId: number) => {
@@ -279,7 +265,6 @@ const SystemPrompts = () => {
         form={form}
         setForm={setForm}
         onSave={handleSave}
-        onGenerate={handleGenerate}
         isEditing={!!form.id}
         isSaving={isSaving}
       />
