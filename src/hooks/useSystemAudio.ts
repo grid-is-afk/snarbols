@@ -99,6 +99,7 @@ export function useSystemAudio() {
 
   const {
     selectedSttProvider,
+    selectedSttFallbackProvider,
     allSttProviders,
     selectedAIProvider,
     allAiProviders,
@@ -248,27 +249,30 @@ export function useSystemAudio() {
               return;
             }
 
+            const fallbackConfig = selectedSttFallbackProvider.provider
+              ? allSttProviders.find(
+                  (p) => p.id === selectedSttFallbackProvider.provider
+                )
+              : undefined;
+
             setIsProcessing(true);
 
-            // Add timeout wrapper for STT request (30 seconds)
-            const sttPromise = fetchSTT({
-              provider: providerConfig,
-              selectedProvider: selectedSttProvider,
-              audio: audioBlob,
-            });
-
-            const timeoutPromise = new Promise<string>((_, reject) => {
-              setTimeout(
-                () => reject(new Error("Speech transcription timed out (30s)")),
-                30000
-              );
-            });
-
+            // The 30s timeout now lives PER-ATTEMPT inside fetchSTT, so each of
+            // the primary and fallback gets its own budget. We no longer wrap
+            // this in an outer race — that would cut off the primary+fallback
+            // sequence at a single 30s window and defeat the failover.
             try {
-              const transcription = await Promise.race([
-                sttPromise,
-                timeoutPromise,
-              ]);
+              const transcription = await fetchSTT({
+                provider: providerConfig,
+                selectedProvider: selectedSttProvider,
+                audio: audioBlob,
+                fallback: fallbackConfig
+                  ? {
+                      provider: fallbackConfig,
+                      selectedProvider: selectedSttFallbackProvider,
+                    }
+                  : undefined,
+              });
 
               if (transcription.trim()) {
                 setLastTranscription(transcription);
@@ -314,6 +318,7 @@ export function useSystemAudio() {
   }, [
     capturing,
     selectedSttProvider,
+    selectedSttFallbackProvider,
     allSttProviders,
     conversation.messages.length,
   ]);

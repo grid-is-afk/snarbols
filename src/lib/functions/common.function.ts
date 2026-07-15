@@ -20,6 +20,19 @@ export function setByPath(obj: any, path: string, value: any): void {
   current[keys[keys.length - 1].replace(/\[(\d+)\]/g, ".$1")] = value;
 }
 
+/**
+ * Order-insensitive JSON serialization of a flat string map. Two maps with the
+ * same entries in a different insertion order produce the SAME string, so they
+ * compare equal — unlike raw `JSON.stringify`, which is key-order sensitive.
+ * Used for provider-variable dedup (primary vs. fallback STT).
+ */
+export function canonicalStringify(variables: Record<string, string>): string {
+  const sortedKeys = Object.keys(variables ?? {}).sort();
+  return JSON.stringify(
+    sortedKeys.map((key) => [key, variables[key]])
+  );
+}
+
 export async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

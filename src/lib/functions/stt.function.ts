@@ -2,11 +2,21 @@ import {
   deepVariableReplacer,
   getByPath,
   blobToBase64,
+  canonicalStringify,
 } from "./common.function";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 import { TYPE_PROVIDER } from "@/types";
 import curl2Json from "@bany/curl-to-json";
+
+/** A single STT provider + its selected variables (primary or fallback). */
+interface STTAttempt {
+  provider: TYPE_PROVIDER | undefined;
+  selectedProvider: {
+    provider: string;
+    variables: Record<string, string>;
+  };
+}
 
 export interface STTParams {
   provider: TYPE_PROVIDER | undefined;
@@ -15,16 +25,43 @@ export interface STTParams {
     variables: Record<string, string>;
   };
   audio: File | Blob;
+  /**
+   * Optional fallback provider. Tried ONLY if the primary attempt THROWS and the
+   * fallback is not an exact duplicate of the primary. A successful return from
+   * the primary — including the empty "No transcription found" sentinel — never
+   * triggers the fallback.
+   */
+  fallback?: {
+    provider: TYPE_PROVIDER | undefined;
+    selectedProvider: {
+      provider: string;
+      variables: Record<string, string>;
+    };
+  };
+  /** Per-attempt timeout in ms. Applied independently to primary and fallback. */
+  timeoutMs?: number;
 }
 
+/** Default per-attempt timeout. A hung provider counts as a failed attempt. */
+const DEFAULT_STT_TIMEOUT_MS = 30000;
+
 /**
- * Transcribes audio and returns either the transcription or an error/warning message as a single string.
+ * Performs one STT request against a single provider. Keeps the exact throw/
+ * return semantics the original `fetchSTT` had:
+ *  - THROWS on: missing provider/selectedProvider/audio, curl parse failure,
+ *    empty audio, network error, and `!response.ok`.
+ *  - RETURNS the transcription string on success, INCLUDING the
+ *    "No transcription found" sentinel when the response carried no text.
  */
-export async function fetchSTT(params: STTParams): Promise<string> {
+async function performSTT(
+  attempt: STTAttempt,
+  audio: File | Blob,
+  signal?: AbortSignal
+): Promise<string> {
   let warnings: string[] = [];
 
   try {
-    const { provider, selectedProvider, audio } = params;
+    const { provider, selectedProvider } = attempt;
 
     if (!provider) throw new Error("Provider not provided");
     if (!selectedProvider) throw new Error("Selected provider not provided");
@@ -160,6 +197,12 @@ export async function fetchSTT(params: STTParams): Promise<string> {
         method: curlJson.method || "POST",
         headers: finalHeaders,
         body: curlJson.method === "GET" ? undefined : body,
+        // Per-attempt abort: when attemptSTT's timeout fires it aborts this
+        // signal so the in-flight request is actually cancelled (server-side
+        // billing stops) instead of racing on unnoticed to a late success that
+        // would double-charge alongside the fallback. Both the browser `fetch`
+        // and tauri's `fetch` honour `signal`.
+        signal,
       });
     } catch (e) {
       throw new Error(`Network error: ${e instanceof Error ? e.message : e}`);
@@ -204,5 +247,118 @@ export async function fetchSTT(params: STTParams): Promise<string> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(msg);
+  }
+}
+
+/**
+ * Runs a single STT attempt under a per-attempt timeout. A hung provider that
+ * never resolves is turned into a THROW (so the orchestrator can fail over).
+ */
+async function attemptSTT(
+  attempt: STTAttempt,
+  audio: File | Blob,
+  timeoutMs: number = DEFAULT_STT_TIMEOUT_MS
+): Promise<string> {
+  // Per-attempt controller: primary and fallback each get their own, so
+  // aborting a timed-out primary never touches the fallback request.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      // Cancel the still-in-flight request BEFORE we fail over. Without this the
+      // slow-but-successful primary would keep running (and billing) and could
+      // double-charge alongside the fallback.
+      controller.abort();
+      reject(
+        new Error(
+          `Speech transcription timed out (${Math.round(timeoutMs / 1000)}s)`
+        )
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    // A normal success or throw settles the race first; the timer is cleared in
+    // `finally` and `controller.abort()` is never called, so nothing is
+    // cancelled prematurely.
+    return await Promise.race([
+      performSTT(attempt, audio, controller.signal),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Whether a fallback attempt is an EXACT duplicate of the primary: same provider
+ * id AND identical variables. The same provider with a different API key is NOT
+ * a duplicate (a legitimate backup key for quota exhaustion).
+ */
+function isExactDuplicate(
+  primary: STTAttempt["selectedProvider"],
+  fallback: STTAttempt["selectedProvider"]
+): boolean {
+  return (
+    primary.provider === fallback.provider &&
+    canonicalStringify(primary.variables) ===
+      canonicalStringify(fallback.variables)
+  );
+}
+
+/**
+ * Transcribes audio and returns the transcription (or a warning/empty sentinel)
+ * as a single string.
+ *
+ * Orchestration: try the primary provider. If it THROWS and a distinct fallback
+ * is configured, silently try the fallback. If the fallback also throws, the
+ * PRIMARY's error is rethrown (the fallback error is logged, not surfaced). With
+ * no fallback configured, behaviour is identical to before this feature existed.
+ *
+ * A returned string — including "No transcription found" on silent audio — is
+ * SUCCESS and never triggers failover, so silent audio never double-charges.
+ */
+export async function fetchSTT(params: STTParams): Promise<string> {
+  const { provider, selectedProvider, audio, fallback, timeoutMs } = params;
+
+  try {
+    return await attemptSTT({ provider, selectedProvider }, audio, timeoutMs);
+  } catch (primaryError) {
+    const hasUsableFallback =
+      !!fallback && !!fallback.selectedProvider.provider && !!fallback.provider;
+
+    if (
+      !hasUsableFallback ||
+      isExactDuplicate(selectedProvider, fallback!.selectedProvider)
+    ) {
+      // No fallback (unchanged legacy behaviour) or a redundant duplicate:
+      // surface the primary error as-is.
+      throw primaryError;
+    }
+
+    console.info(
+      "[stt] primary provider failed; attempting fallback provider"
+    );
+
+    try {
+      return await attemptSTT(
+        {
+          provider: fallback!.provider,
+          selectedProvider: fallback!.selectedProvider,
+        },
+        audio,
+        timeoutMs
+      );
+    } catch (fallbackError) {
+      // Both failed. Surface the PRIMARY's error (the provider the user chose as
+      // their main one); log the fallback error for diagnostics only.
+      console.warn(
+        "[stt] fallback provider also failed:",
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError)
+      );
+      throw primaryError;
+    }
   }
 }
