@@ -14,6 +14,7 @@ export const Selection = ({
   placeholder,
   isLoading = false,
   disabled = false,
+  customGroupLabel = "Custom AI Providers",
 }: {
   selected?: string;
   onChange: (value: any) => void;
@@ -21,6 +22,11 @@ export const Selection = ({
   placeholder?: string;
   isLoading?: boolean;
   disabled?: boolean;
+  /**
+   * Heading for the grouped custom-provider section. Defaults to the AI wording
+   * so existing AI dropdowns are unchanged; STT dropdowns pass their own label.
+   */
+  customGroupLabel?: string;
 }) => {
   return (
     <Select value={selected || ""} onValueChange={(value) => onChange(value)}>
@@ -43,7 +49,7 @@ export const Selection = ({
         {options?.filter((provider) => provider.isCustom).length > 0 && (
           <div className="border-b border-input/50 pb-2">
             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
-              Custom AI Providers
+              {customGroupLabel}
             </div>
             {options
               ?.filter((provider) => provider.isCustom)

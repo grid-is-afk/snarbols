@@ -24,6 +24,15 @@ export interface UseSettingsReturn {
     provider: string;
     variables: Record<string, string>;
   }) => void;
+  selectedSttFallbackProvider: {
+    provider: string;
+    variables: Record<string, string>;
+  };
+  onSetSelectedSttFallbackProvider: (provider: {
+    provider: string;
+    variables: Record<string, string>;
+  }) => void;
+  sttFallbackVariables: { key: string; value: string }[];
   handleDeleteAllChatsConfirm: () => void;
   showDeleteConfirmDialog: boolean;
   setShowDeleteConfirmDialog: React.Dispatch<React.SetStateAction<boolean>>;

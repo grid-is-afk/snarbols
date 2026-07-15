@@ -15,14 +15,22 @@ export const useSettings = () => {
     allSttProviders,
     selectedAIProvider,
     selectedSttProvider,
+    selectedSttFallbackProvider,
     onSetSelectedAIProvider,
     onSetSelectedSttProvider,
+    onSetSelectedSttFallbackProvider,
     hasActiveLicense,
   } = useApp();
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(
     []
   );
   const [sttVariables, setSttVariables] = useState<
+    {
+      key: string;
+      value: string;
+    }[]
+  >([]);
+  const [sttFallbackVariables, setSttFallbackVariables] = useState<
     {
       key: string;
       value: string;
@@ -85,6 +93,21 @@ export const useSettings = () => {
     }
   }, [selectedSttProvider.provider, allSttProviders]);
 
+  useEffect(() => {
+    if (selectedSttFallbackProvider.provider) {
+      const provider = allSttProviders.find(
+        (p) => p.id === selectedSttFallbackProvider.provider
+      );
+      if (provider) {
+        const variables = extractVariables(provider?.curl);
+        setSttFallbackVariables(variables);
+      }
+    } else {
+      // Cleared to "None": drop any stale variable inputs.
+      setSttFallbackVariables([]);
+    }
+  }, [selectedSttFallbackProvider.provider, allSttProviders]);
+
   const handleDeleteAllChatsConfirm = async () => {
     try {
       await deleteAllConversations();
@@ -104,13 +127,16 @@ export const useSettings = () => {
     allSttProviders,
     selectedAIProvider,
     selectedSttProvider,
+    selectedSttFallbackProvider,
     onSetSelectedAIProvider,
     onSetSelectedSttProvider,
+    onSetSelectedSttFallbackProvider,
     handleDeleteAllChatsConfirm,
     showDeleteConfirmDialog,
     setShowDeleteConfirmDialog,
     variables,
     sttVariables,
+    sttFallbackVariables,
     hasActiveLicense,
   };
 };

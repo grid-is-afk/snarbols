@@ -21,7 +21,8 @@ const AutoSpeechVADInternal = ({
   microphoneDeviceId,
 }: AutoSpeechVADProps) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const { selectedSttProvider, allSttProviders } = useApp();
+  const { selectedSttProvider, selectedSttFallbackProvider, allSttProviders } =
+    useApp();
 
   const audioConstraints: MediaTrackConstraints =
     microphoneDeviceId && microphoneDeviceId !== "default"
@@ -64,6 +65,12 @@ const AutoSpeechVADInternal = ({
           return;
         }
 
+        const fallbackConfig = selectedSttFallbackProvider.provider
+          ? allSttProviders.find(
+              (p) => p.id === selectedSttFallbackProvider.provider
+            )
+          : undefined;
+
         setIsTranscribing(true);
 
         // Use the fetchSTT function for all providers
@@ -71,6 +78,12 @@ const AutoSpeechVADInternal = ({
           provider: providerConfig,
           selectedProvider: selectedSttProvider,
           audio: audioBlob,
+          fallback: fallbackConfig
+            ? {
+                provider: fallbackConfig,
+                selectedProvider: selectedSttFallbackProvider,
+              }
+            : undefined,
         });
 
         if (transcription) {

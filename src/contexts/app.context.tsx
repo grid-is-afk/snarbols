@@ -4,7 +4,7 @@ import {
   SPEECH_TO_TEXT_PROVIDERS,
   STORAGE_KEYS,
 } from "@/config";
-import { getPlatform, safeLocalStorage } from "@/lib";
+import { canonicalStringify, getPlatform, safeLocalStorage } from "@/lib";
 import {
   getShortcutsConfig,
   decryptValue,
@@ -83,6 +83,7 @@ const SECRET_STORAGE_KEYS: string[] = [
   STORAGE_KEYS.CUSTOM_SPEECH_PROVIDERS,
   STORAGE_KEYS.SELECTED_AI_PROVIDER,
   STORAGE_KEYS.SELECTED_STT_PROVIDER,
+  STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER,
 ];
 
 // Create the context
@@ -139,6 +140,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     provider: "",
     variables: {},
   });
+
+  // Optional fallback STT provider. Tried automatically (and silently) only if
+  // the primary STT provider THROWS. Empty `provider` = no fallback configured.
+  const [selectedSttFallbackProvider, setSelectedSttFallbackProvider] =
+    useState<{
+      provider: string;
+      variables: Record<string, string>;
+    }>({
+      provider: "",
+      variables: {},
+    });
 
   const [screenshotConfiguration, setScreenshotConfiguration] =
     useState<ScreenshotConfig>({
@@ -309,6 +321,38 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           error instanceof Error ? error.name : "unknown error"
         );
       }
+    }
+
+    // Load selected STT fallback provider (decrypt-at-rest; plaintext passes
+    // through). Shares the SAME decryptFailures accounting as the reads above so
+    // a failure here surfaces via the existing vault-decrypt banner.
+    const rawSelectedSttFallback = safeLocalStorage.getItem(
+      STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER
+    );
+    if (rawSelectedSttFallback) {
+      try {
+        setSelectedSttFallbackProvider(
+          JSON.parse(await decryptValue(rawSelectedSttFallback))
+        );
+      } catch (error) {
+        if (rawSelectedSttFallback.startsWith(ENC_PREFIX)) decryptFailures++;
+        console.warn(
+          "Failed to load selected STT fallback provider:",
+          error instanceof Error ? error.name : "unknown error"
+        );
+      }
+    } else {
+      // The key is absent/falsy — e.g. another window cleared the fallback
+      // (`None`), whose `removeItem` fired a `storage` event that re-ran
+      // loadData here. Without this reset the stale in-memory fallback would
+      // keep serving failovers to a deleted provider until reload. Use a
+      // functional update so an already-empty state returns the SAME reference
+      // and React bails out — no re-render, no redundant save-effect run (and
+      // the save effect early-returns on an empty provider anyway, so no
+      // cross-window clear loop). The primary provider path is untouched.
+      setSelectedSttFallbackProvider((prev) =>
+        prev.provider ? { provider: "", variables: {} } : prev
+      );
     }
 
     // Surface whether any encrypted blob failed to open this load.
@@ -502,6 +546,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         e.key === STORAGE_KEYS.SELECTED_AI_PROVIDER ||
         e.key === STORAGE_KEYS.CUSTOM_SPEECH_PROVIDERS ||
         e.key === STORAGE_KEYS.SELECTED_STT_PROVIDER ||
+        e.key === STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER ||
         e.key === STORAGE_KEYS.SYSTEM_PROMPT ||
         e.key === STORAGE_KEYS.SCREENSHOT_CONFIG ||
         e.key === STORAGE_KEYS.CUSTOMIZABLE ||
@@ -590,6 +635,39 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [selectedSttProvider]);
 
+  // Sync selected STT fallback to localStorage (encrypt-at-rest)
+  useEffect(() => {
+    if (!selectedSttFallbackProvider.provider) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const serialized = JSON.stringify(selectedSttFallbackProvider);
+        const existing = safeLocalStorage.getItem(
+          STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER
+        );
+        if (existing) {
+          const decoded = await decryptValue(existing).catch(() => null);
+          if (decoded === serialized) return;
+        }
+        const encrypted = await encryptValue(serialized);
+        if (!cancelled) {
+          safeLocalStorage.setItem(
+            STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER,
+            encrypted
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[secure-vault] failed to persist selected STT fallback provider",
+          error
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSttFallbackProvider]);
+
   // Computed all AI providers
   const allAiProviders: TYPE_PROVIDER[] = [
     ...AI_PROVIDERS,
@@ -644,7 +722,60 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // If the new primary is the SAME provider the fallback currently points at,
+    // the fallback is now redundant/hidden (the fallback dropdown filters out
+    // the primary id, so it would no longer be shown yet would still fire on
+    // failover). Primary takes precedence: clear the fallback so state and UI
+    // stay truthful. Mirror the explicit-clear path (remove the persisted blob
+    // + reset to empty); the fallback save-effect early-returns on the empty
+    // provider, so this doesn't fight it.
+    if (provider && provider === selectedSttFallbackProvider.provider) {
+      safeLocalStorage.removeItem(STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER);
+      setSelectedSttFallbackProvider({ provider: "", variables: {} });
+    }
+
     setSelectedSttProvider((prev) => ({ ...prev, provider, variables }));
+  };
+
+  // Setter for the optional fallback STT provider.
+  const onSetSelectedSttFallbackProvider = ({
+    provider,
+    variables,
+  }: {
+    provider: string;
+    variables: Record<string, string>;
+  }) => {
+    // Empty provider clears the fallback. Remove the persisted (encrypted) blob
+    // here rather than in the save effect: the effect early-returns on an empty
+    // provider (mirroring the primary) to avoid wiping storage during the
+    // empty-initial-state window before loadData runs, so explicit clearing must
+    // be handled at the point of user intent.
+    if (!provider) {
+      safeLocalStorage.removeItem(STORAGE_KEYS.SELECTED_STT_FALLBACK_PROVIDER);
+      setSelectedSttFallbackProvider({ provider: "", variables: {} });
+      return;
+    }
+
+    if (!allSttProviders.some((p) => p.id === provider)) {
+      console.warn(`Invalid STT fallback provider ID: ${provider}`);
+      return;
+    }
+
+    // Reject only an EXACT duplicate of the primary: same provider id AND
+    // identical variables. The same provider with a *different* API key is
+    // allowed on purpose (a backup key for when the primary key hits quota).
+    const sameId = provider === selectedSttProvider.provider;
+    const sameVariables =
+      canonicalStringify(variables) ===
+      canonicalStringify(selectedSttProvider.variables);
+    if (sameId && sameVariables) {
+      console.warn(
+        "STT fallback must differ from the primary provider (same id and same variables)"
+      );
+      return;
+    }
+
+    setSelectedSttFallbackProvider((prev) => ({ ...prev, provider, variables }));
   };
 
   // Toggle handlers
@@ -706,6 +837,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     customSttProviders,
     selectedSttProvider,
     onSetSelectedSttProvider,
+    selectedSttFallbackProvider,
+    onSetSelectedSttFallbackProvider,
     screenshotConfiguration,
     setScreenshotConfiguration,
     customizable,

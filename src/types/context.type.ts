@@ -31,6 +31,23 @@ export type IContextType = {
     provider: string;
     variables: Record<string, string>;
   }) => void;
+  /**
+   * Optional fallback STT provider. When the primary STT provider throws, the
+   * transcription is retried against this provider automatically (silent to the
+   * user). An empty `provider` string means no fallback is configured — in which
+   * case STT behaves exactly as it did before the fallback feature existed.
+   */
+  selectedSttFallbackProvider: {
+    provider: string;
+    variables: Record<string, string>;
+  };
+  onSetSelectedSttFallbackProvider: ({
+    provider,
+    variables,
+  }: {
+    provider: string;
+    variables: Record<string, string>;
+  }) => void;
   screenshotConfiguration: ScreenshotConfig;
   setScreenshotConfiguration: React.Dispatch<
     React.SetStateAction<ScreenshotConfig>

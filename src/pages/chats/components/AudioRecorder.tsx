@@ -16,8 +16,12 @@ export const AudioRecorder = ({
   onTranscriptionComplete,
   onCancel,
 }: AudioRecorderProps) => {
-  const { selectedSttProvider, allSttProviders, selectedAudioDevices } =
-    useApp();
+  const {
+    selectedSttProvider,
+    selectedSttFallbackProvider,
+    allSttProviders,
+    selectedAudioDevices,
+  } = useApp();
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -153,10 +157,22 @@ export const AudioRecorder = ({
         (p) => p.id === selectedSttProvider.provider
       );
 
+      const fallbackProvider = selectedSttFallbackProvider.provider
+        ? allSttProviders.find(
+            (p) => p.id === selectedSttFallbackProvider.provider
+          )
+        : undefined;
+
       const text = await fetchSTT({
         provider,
         selectedProvider: selectedSttProvider,
         audio: audioBlob,
+        fallback: fallbackProvider
+          ? {
+              provider: fallbackProvider,
+              selectedProvider: selectedSttFallbackProvider,
+            }
+          : undefined,
       });
 
       onTranscriptionComplete(text);
