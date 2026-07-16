@@ -25,23 +25,23 @@ Files: `Snarbols_<version>_x64-setup.exe` (recommended) or `Snarbols_<version>_x
 
 ---
 
-## macOS
+## macOS  (Apple Silicon only — M1/M2/M3/M4)
 
-File: `Snarbols_<version>_aarch64.dmg` (Apple Silicon) or the `x64` dmg (Intel).
+File: `Snarbols_<version>_aarch64.dmg`. **There is no Intel (x86) macOS build yet** — if your Mac
+is Intel-based, tell the person who sent you this; the app won't run.
 
 1. Open the `.dmg` and drag **Snarbols** into **Applications**.
-2. **Do not** double-click it the first time — macOS will say it "cannot be opened because the
-   developer cannot be verified" (or "is damaged").
-3. Instead: open **Applications**, **right-click** Snarbols → **Open** → **Open** again in the dialog.
-   (Right-click → Open only needs to be done once; afterwards it launches normally.)
-
-If right-click → Open still refuses (newer macOS can be stricter), run this in **Terminal** once:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Snarbols.app
-```
-
-Then open the app normally.
+2. macOS will say **"Snarbols is damaged and can't be opened"** (or "developer cannot be verified").
+   The app is **not** damaged — this is just macOS blocking an app that isn't signed with a paid
+   Apple certificate yet.
+3. **The fix (required for the "damaged" message — right-click → Open does NOT work for this one):**
+   open **Terminal** (Applications → Utilities → Terminal) and run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Snarbols.app
+   ```
+   (If you put Snarbols somewhere other than Applications, drag the app onto the Terminal window
+   after typing `xattr -dr com.apple.quarantine ` to fill in the correct path.)
+4. Now open Snarbols normally (double-click). It launches from here on.
 
 ---
 
