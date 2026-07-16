@@ -26,6 +26,16 @@ export const AI_PROVIDERS = [
   }'`,
     responseContentPath: "content[0].text",
     streaming: true,
+    // Sonnet is the default on purpose: it is broadly accessible on Anthropic
+    // keys where Opus 403s with INSUFFICIENT_PERMISSIONS. These IDs are current
+    // and correct — lowercase, hyphenated, no date suffixes.
+    defaultModel: "claude-sonnet-5",
+    models: [
+      "claude-sonnet-5",
+      "claude-opus-4-8",
+      "claude-haiku-4-5",
+      "claude-fable-5",
+    ],
   },
   {
     id: "grok",
