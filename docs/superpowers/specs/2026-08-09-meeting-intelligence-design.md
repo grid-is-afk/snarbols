@@ -135,10 +135,18 @@ be regenerated later from stored turns.
 
 ## Model calls
 
+### The analysis model
+
+The cheap model is stored as a **`MODEL` override applied to the main provider**, not as a second
+provider selection. Both run on the same credentials with a different model id, which means there
+is no duplicate copy of the API key to leak or to go stale when the key is rotated. An empty
+override means "use the main model", so meetings work before the setting is ever touched — they
+just cost more per turn.
+
 ### 1. Brief distillation
 
 Runs on folder selection and on fingerprint change. Reads doc text with a per-file character
-budget and a total budget. Uses the **analysis** provider. Output is prose in a fixed section
+budget and a total budget. Uses the **analysis** model. Output is prose in a fixed section
 structure, stored and later injected verbatim.
 
 ### 2. Per-turn analysis (hot path)
