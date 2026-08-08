@@ -11,6 +11,7 @@ import {
   GlobeIcon,
   BugIcon,
   MessageSquareTextIcon,
+  PresentationIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { GithubIcon } from "@/components";
@@ -32,6 +33,11 @@ export const useMenuItems = () => {
       icon: MessagesSquare,
       label: "Chats",
       href: "/chats",
+    },
+    {
+      icon: PresentationIcon,
+      label: "Meetings",
+      href: "/meetings",
     },
     {
       icon: WandSparkles,

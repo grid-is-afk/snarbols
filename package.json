@@ -38,7 +38,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "check:meeting": "node scripts/checks/run.mjs"
   },
   "dependencies": {
     "@bany/curl-to-json": "^1.2.8",
@@ -89,6 +90,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "esbuild": "^0.25.12",
     "tw-animate-css": "^1.3.6",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"

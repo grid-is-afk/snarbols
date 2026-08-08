@@ -43,7 +43,7 @@ import {
   saveTurn,
 } from "@/lib/database/meeting.action";
 import {
-  getAnalysisProvider,
+  getAnalysisModel,
   getMeetingFolder,
   setMeetingFolder,
 } from "@/lib/storage/analysis-provider";
@@ -138,21 +138,31 @@ export function useMeeting() {
 
   /* ------------------------------------------------------------- providers */
 
-  const analysisTarget = useCallback(async () => {
-    // Configured analysis provider wins; otherwise fall back to the main chat
-    // provider so a meeting works before this is ever set up.
-    const configured = await getAnalysisProvider();
-    const selection = configured.provider ? configured : selectedAIProvider;
-    const provider = allAiProviders.find((p) => p.id === selection.provider);
-    return { provider, selection };
-  }, [allAiProviders, selectedAIProvider]);
-
   const mainTarget = useCallback(() => {
     const provider = allAiProviders.find(
       (p) => p.id === selectedAIProvider.provider
     );
     return { provider, selection: selectedAIProvider };
   }, [allAiProviders, selectedAIProvider]);
+
+  /**
+   * The hot path runs on the main provider's credentials with `MODEL` swapped
+   * for the cheaper analysis model. With no override configured this is exactly
+   * the main target, so meetings work before the setting is ever touched.
+   */
+  const analysisTarget = useCallback(() => {
+    const base = mainTarget();
+    const model = getAnalysisModel();
+    if (!model) return base;
+
+    return {
+      provider: base.provider,
+      selection: {
+        provider: base.selection.provider,
+        variables: { ...base.selection.variables, MODEL: model },
+      },
+    };
+  }, [mainTarget]);
 
   /* ----------------------------------------------------------------- brief */
 
@@ -161,7 +171,7 @@ export function useMeeting() {
       setBriefStatus("loading");
       setBriefMessage(null);
 
-      const { provider, selection } = await analysisTarget();
+      const { provider, selection } = analysisTarget();
       const result = await loadOrBuildBrief({
         folderPath: path,
         provider,
@@ -246,7 +256,7 @@ export function useMeeting() {
     analysisInFlightRef.current = true;
 
     try {
-      const { provider, selection } = await analysisTarget();
+      const { provider, selection } = analysisTarget();
       if (!provider) return;
 
       const windowTurns = buffer
@@ -668,7 +678,12 @@ export function useMeeting() {
    * a meeting, including the error paths.
    */
   const panelOpen = phase !== "idle" || recap !== null;
+  const hasPinnedRef = useRef(false);
   useEffect(() => {
+    // Skip the initial closed state: releasing a pin that was never taken would
+    // fire a pointless resize on every app start.
+    if (!panelOpen && !hasPinnedRef.current) return;
+    hasPinnedRef.current = panelOpen;
     void pinWindowHeight(panelOpen ? MEETING.WINDOW_HEIGHT : null);
   }, [panelOpen]);
 

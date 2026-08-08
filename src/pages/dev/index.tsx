@@ -1,4 +1,4 @@
-import { AIProviders, STTProviders } from "./components";
+import { AIProviders, STTProviders, MeetingAnalysis } from "./components";
 import { useSettings } from "@/hooks";
 import { PageLayout } from "@/layouts";
 
@@ -12,6 +12,9 @@ const DevSpace = () => {
 
       {/* STT Providers */}
       <STTProviders {...settings} />
+
+      {/* Meeting analysis model */}
+      <MeetingAnalysis />
     </PageLayout>
   );
 };

@@ -11,9 +11,9 @@ export const STORAGE_KEYS = {
   SELECTED_AI_PROVIDER: "curl_selected_ai_provider",
   SELECTED_STT_PROVIDER: "curl_selected_stt_provider",
   SELECTED_STT_FALLBACK_PROVIDER: "curl_selected_stt_fallback_provider",
-  // Cheaper model used for per-turn meeting analysis. Falls back to the main
-  // AI provider when unset, so meetings work before it is ever configured.
-  SELECTED_ANALYSIS_PROVIDER: "curl_selected_analysis_provider",
+  // Cheaper model for the per-turn meeting analysis, applied as a MODEL
+  // override on the main provider. Not a secret — no API key is stored here.
+  ANALYSIS_MODEL: "meeting_analysis_model",
   MEETING_FOLDER: "meeting_folder_path",
   SYSTEM_AUDIO_CONTEXT: "system_audio_context",
   SYSTEM_AUDIO_QUICK_ACTIONS: "system_audio_quick_actions",
