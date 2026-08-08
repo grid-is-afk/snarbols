@@ -10,10 +10,37 @@ const isAnyPopoverOpen = (): boolean => {
   return popoverContents.length > 0;
 };
 
+/**
+ * Height held by a long-lived surface that is NOT a Radix popover.
+ *
+ * The MutationObserver below collapses the window whenever no popover is open,
+ * which is correct for the popover-driven modes but would snap a live meeting
+ * panel shut mid-sentence. A pin overrides every resize until it is released.
+ */
+let pinnedHeight: number | null = null;
+
+export const pinWindowHeight = async (height: number | null) => {
+  pinnedHeight = height;
+  try {
+    const window = getCurrentWebviewWindow();
+    await invoke("set_window_height", {
+      window,
+      height: height ?? 54,
+    });
+  } catch (error) {
+    console.error("Failed to pin window height:", error);
+  }
+};
+
 export const useWindowResize = () => {
   const resizeWindow = useCallback(async (expanded: boolean) => {
     try {
       const window = getCurrentWebviewWindow();
+
+      // A pinned surface owns the window height outright.
+      if (pinnedHeight !== null) {
+        return;
+      }
 
       if (!expanded && isAnyPopoverOpen()) {
         return;

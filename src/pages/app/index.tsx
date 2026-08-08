@@ -4,6 +4,9 @@ import {
   Completion,
   AudioVisualizer,
   StatusIndicator,
+  MeetingBar,
+  MeetingPanel,
+  MeetingMicCapture,
 } from "./components";
 import { useApp } from "@/hooks";
 import { useApp as useAppContext } from "@/contexts";
@@ -14,9 +17,13 @@ import { ErrorLayout } from "@/layouts";
 import { getPlatform } from "@/lib";
 
 const App = () => {
-  const { isHidden, systemAudio } = useApp();
-  const { customizable } = useAppContext();
+  const { isHidden, systemAudio, meeting } = useApp();
+  const { customizable, selectedAudioDevices } = useAppContext();
   const platform = getPlatform();
+
+  // The panel owns the whole window while a meeting is running and while its
+  // record is on screen afterwards.
+  const meetingPanelOpen = meeting.phase !== "idle" || meeting.recap !== null;
 
   const openDashboard = async () => {
     try {
@@ -41,6 +48,22 @@ const App = () => {
           isHidden ? "hidden pointer-events-none" : ""
         }`}
       >
+        {meeting.isLive ? (
+          <MeetingMicCapture
+            microphoneDeviceId={selectedAudioDevices.input.id}
+            onUtterance={meeting.ingestMicUtterance}
+            onUnavailable={meeting.reportMicUnavailable}
+          />
+        ) : null}
+
+        {meetingPanelOpen ? (
+          <Card className="relative flex h-full w-full flex-col overflow-hidden p-0">
+            <MeetingPanel {...meeting} />
+            <div className="absolute right-1 top-1">
+              <DragButton />
+            </div>
+          </Card>
+        ) : (
         <Card className="w-full flex flex-row items-center gap-2 p-2">
           <SystemAudio {...systemAudio} />
           {systemAudio?.capturing ? (
@@ -68,6 +91,10 @@ const App = () => {
             }`}
           >
             <Completion isHidden={isHidden} />
+            <MeetingBar
+              meeting={meeting}
+              captureBusy={Boolean(systemAudio?.capturing)}
+            />
             <Button
               size={"icon"}
               className="cursor-pointer"
@@ -81,6 +108,7 @@ const App = () => {
 
           <DragButton />
         </Card>
+        )}
         {customizable.cursor.type === "invisible" && platform !== "linux" ? (
           <CustomCursor />
         ) : null}

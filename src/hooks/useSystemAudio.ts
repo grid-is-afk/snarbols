@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useWindowResize, useGlobalShortcuts } from ".";
+import { useWindowResize } from ".";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/contexts";
@@ -66,7 +66,6 @@ export type useSystemAudioType = ReturnType<typeof useSystemAudio>;
 
 export function useSystemAudio() {
   const { resizeWindow } = useWindowResize();
-  const globalShortcuts = useGlobalShortcuts();
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -700,15 +699,17 @@ export function useSystemAudio() {
     resizeWindow,
   ]);
 
-  useEffect(() => {
-    globalShortcuts.registerSystemAudioCallback(async () => {
-      if (capturing) {
-        await stopCapture();
-      } else {
-        await startCapture();
-      }
-    });
-  }, [startCapture, stopCapture]);
+  // NOTE: the system-audio global shortcut is NOT registered here. Meeting mode
+  // reuses the same shortcut for its on-demand answer, and two hooks writing to
+  // one callback slot race on mount order. `useApp` owns the registration and
+  // dispatches to whichever mode is active.
+  const toggleCapture = useCallback(async () => {
+    if (capturing) {
+      await stopCapture();
+    } else {
+      await startCapture();
+    }
+  }, [capturing, startCapture, stopCapture]);
 
   useEffect(() => {
     return () => {
@@ -926,5 +927,7 @@ export function useSystemAudio() {
     ignoreContinuousRecording,
     // Scroll area ref for keyboard navigation
     scrollAreaRef,
+    // Exposed for the centralized shortcut dispatcher in `useApp`.
+    toggleCapture,
   };
 }

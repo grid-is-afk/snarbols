@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { useTitles, useSystemAudio } from "@/hooks";
+import {
+  useTitles,
+  useSystemAudio,
+  useMeeting,
+  useGlobalShortcuts,
+} from "@/hooks";
 import { listen } from "@tauri-apps/api/event";
 import { safeLocalStorage, migrateLocalStorageToSQLite } from "@/lib";
 import { getShortcutsConfig } from "@/lib/storage";
@@ -7,9 +12,34 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const useApp = () => {
   const systemAudio = useSystemAudio();
+  const meeting = useMeeting();
+  const globalShortcuts = useGlobalShortcuts();
   const [isHidden, setIsHidden] = useState(false);
   // Initialize title management
   useTitles();
+
+  /**
+   * Single owner of the system-audio global shortcut.
+   *
+   * While a meeting is live the shortcut asks "what do I say back" instead of
+   * toggling capture — the meeting already holds the capture device, so the
+   * toggle has nothing useful to do, and this gives the on-demand answer a
+   * genuinely global hotkey without adding a new Rust shortcut action.
+   */
+  useEffect(() => {
+    globalShortcuts.registerSystemAudioCallback(() => {
+      if (meeting.isLive) {
+        void meeting.requestOnDemand();
+      } else {
+        void systemAudio.toggleCapture();
+      }
+    });
+  }, [
+    globalShortcuts,
+    meeting.isLive,
+    meeting.requestOnDemand,
+    systemAudio.toggleCapture,
+  ]);
 
   // Initialize shortcuts from localStorage on app startup
   useEffect(() => {
@@ -153,5 +183,6 @@ export const useApp = () => {
     handleSelectConversation,
     handleNewConversation,
     systemAudio,
+    meeting,
   };
 };

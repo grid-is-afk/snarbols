@@ -50,6 +50,13 @@ export async function* fetchAIResponse(params: {
   userMessage: string;
   imagesBase64?: string[];
   signal?: AbortSignal;
+  /**
+   * Send `systemPrompt` verbatim, skipping the markdown/length/language
+   * enhancements. Required for callers that need a machine-readable reply:
+   * the markdown instructions push the model toward fenced prose and the
+   * response-length setting can truncate structured output mid-object.
+   */
+  rawSystemPrompt?: boolean;
 }): AsyncIterable<string> {
   try {
     const {
@@ -60,6 +67,7 @@ export async function* fetchAIResponse(params: {
       userMessage,
       imagesBase64 = [],
       signal,
+      rawSystemPrompt = false,
     } = params;
 
     // Check if already aborted
@@ -67,7 +75,9 @@ export async function* fetchAIResponse(params: {
       return;
     }
 
-    const enhancedSystemPrompt = buildEnhancedSystemPrompt(systemPrompt);
+    const enhancedSystemPrompt = rawSystemPrompt
+      ? systemPrompt || ""
+      : buildEnhancedSystemPrompt(systemPrompt);
 
     if (!provider) {
       throw new Error(`Provider not provided`);
