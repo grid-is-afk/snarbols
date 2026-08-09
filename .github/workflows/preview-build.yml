@@ -8,8 +8,16 @@ name: preview-build
 # feature branch can be smoke-tested on a real machine before it is merged and
 # before any version number is claimed.
 #
-# Run with: gh workflow run preview-build.yml --ref <branch>
+# Trigger from a branch by pushing a `preview-*` tag:
+#   git tag preview-<name> && git push origin preview-<name>
+# GitHub only dispatches workflows that already exist on the default branch, so
+# the tag trigger is what makes this usable before the branch is merged. The
+# `preview-` prefix cannot collide with release.yml, which fires on `v*`, and
+# creates no release of its own.
 on:
+  push:
+    tags:
+      - "preview-*"
   workflow_dispatch:
     inputs:
       platforms:
@@ -39,6 +47,8 @@ jobs:
         shell: bash
         run: |
           want='${{ github.event.inputs.platforms }}'
+          # Tag pushes carry no inputs — build everything.
+          [ -z "$want" ] && want=all
           case '${{ matrix.platform }}' in
             windows-latest) me=windows ;;
             macos-latest)   me=macos ;;
