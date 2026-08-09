@@ -1,0 +1,87 @@
+name: verify
+
+# Build verification that ships nothing.
+#
+# There is no cargo/MSVC on the primary development machine, so Rust and Tauri
+# configuration errors used to surface only when cutting a release — the
+# posthog and updater removals both failed that way, because Tauri validates
+# capability permissions at build time before it compiles anything. This runs
+# the same validation on every branch push, so a bad plugin/permission pairing
+# fails here instead of in a release.
+on:
+  push:
+    branches-ignore:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: typecheck, build, checks
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Meeting logic checks
+        run: npm run check:meeting
+
+  rust:
+    name: cargo check (tauri config + capabilities)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # tauri-build runs from build.rs during `cargo check`, so this is what
+      # catches a plugin added without its capability permissions.
+      - name: Build frontend for tauri context
+        run: npm run build
+
+      # Not --locked: Cargo.lock cannot be refreshed on the dev machine (no
+      # cargo), so newly added dependencies are resolved here.
+      - name: Cargo check
+        working-directory: ./src-tauri
+        run: cargo check
+
+      - name: Show Cargo.lock drift
+        if: always()
+        working-directory: ./src-tauri
+        run: git diff --stat Cargo.lock || true
