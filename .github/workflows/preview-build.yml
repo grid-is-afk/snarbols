@@ -1,0 +1,101 @@
+name: preview-build
+
+# Builds installers for a branch WITHOUT creating a GitHub Release.
+#
+# release.yml auto-publishes, so using it to test an unmerged branch would put
+# a release on the repo that looks like the next official version. This
+# produces the same installers as downloadable workflow artifacts instead, so a
+# feature branch can be smoke-tested on a real machine before it is merged and
+# before any version number is claimed.
+#
+# Run with: gh workflow run preview-build.yml --ref <branch>
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Which installers to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, macos-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Should this platform run?
+        id: gate
+        shell: bash
+        run: |
+          want='${{ github.event.inputs.platforms }}'
+          case '${{ matrix.platform }}' in
+            windows-latest) me=windows ;;
+            macos-latest)   me=macos ;;
+            *)              me=linux ;;
+          esac
+          if [ "$want" = "all" ] || [ "$want" = "$me" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: swatinem/rust-cache@v2
+        if: steps.gate.outputs.run == 'true'
+        with:
+          workspaces: "./src-tauri -> target"
+          key: ${{ matrix.platform }}
+
+      - name: Install Linux build dependencies
+        if: steps.gate.outputs.run == 'true' && matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev
+
+      - name: Install frontend dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: npm ci
+
+      - name: Build installers
+        if: steps.gate.outputs.run == 'true'
+        run: npm run tauri build
+
+      - name: Upload installers
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snarbols-preview-${{ matrix.platform }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app.tar.gz
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
