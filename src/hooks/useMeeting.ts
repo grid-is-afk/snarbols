@@ -66,6 +66,7 @@ const EMPTY_WARNINGS: MeetingWarnings = {
   micUnavailable: false,
   contextUnavailable: false,
   analysisPaused: false,
+  transcriptionFailing: false,
   noAudio: false,
 };
 
@@ -117,6 +118,7 @@ export function useMeeting() {
   const analysisInFlightRef = useRef(false);
   const analysisQueuedRef = useRef(false);
   const consecutiveFailuresRef = useRef(0);
+  const sttFailuresRef = useRef(0);
   const lastAudioAtRef = useRef<number>(0);
   const seenSignalsRef = useRef<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
@@ -370,6 +372,13 @@ export function useMeeting() {
         });
         const resolved = buffer.resolve(turnId, text);
         if (resolved) saveTurn(resolved).catch(() => {});
+
+        if (resolved?.status === "final") {
+          sttFailuresRef.current = 0;
+          setWarnings((w) =>
+            w.transcriptionFailing ? { ...w, transcriptionFailing: false } : w
+          );
+        }
       } catch (error) {
         console.warn(
           "Meeting transcription failed:",
@@ -377,6 +386,15 @@ export function useMeeting() {
         );
         const failedTurn = buffer.fail(turnId);
         if (failedTurn) saveTurn(failedTurn).catch(() => {});
+
+        // A transcript filling with "not transcribed" and no explanation is the
+        // same silent-failure trap as a blank signal panel. Say it out loud.
+        sttFailuresRef.current += 1;
+        if (sttFailuresRef.current >= MEETING.CONSECUTIVE_FAILURE_LIMIT) {
+          setWarnings((w) =>
+            w.transcriptionFailing ? w : { ...w, transcriptionFailing: true }
+          );
+        }
       } finally {
         syncTurns();
         void runAnalysis();
@@ -488,6 +506,7 @@ export function useMeeting() {
     setWarnings(EMPTY_WARNINGS);
     seenSignalsRef.current = new Set();
     consecutiveFailuresRef.current = 0;
+    sttFailuresRef.current = 0;
     analysisInFlightRef.current = false;
     analysisQueuedRef.current = false;
     setPhase("starting");

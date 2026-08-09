@@ -112,6 +112,10 @@ export const MeetingPanel = (meeting: UseMeetingReturn) => {
       list.push("No audio detected for 2 minutes — check your meeting output.");
     if (warnings.micUnavailable)
       list.push("Microphone unavailable — your side is not being captured.");
+    if (warnings.transcriptionFailing)
+      list.push(
+        "Speech-to-text is failing — check the STT provider and your key."
+      );
     if (warnings.analysisPaused)
       list.push("Analysis paused after repeated failures — check the provider.");
     if (warnings.contextUnavailable)

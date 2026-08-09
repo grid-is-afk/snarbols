@@ -104,6 +104,8 @@ export interface MeetingWarnings {
   contextUnavailable: boolean;
   /** Analysis paused after consecutive failures. */
   analysisPaused: boolean;
+  /** Transcription failing repeatedly — the transcript is going blank. */
+  transcriptionFailing: boolean;
   /** No audio from either source for the silence threshold. */
   noAudio: boolean;
 }
