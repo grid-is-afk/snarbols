@@ -41,8 +41,18 @@ jobs:
         run: npm run check:meeting
 
   rust:
-    name: cargo check (tauri config + capabilities)
-    runs-on: ubuntu-22.04
+    name: cargo check (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      # Every platform must be reported, not just the first failure — a
+      # capability error on one OS says nothing about the others.
+      fail-fast: false
+      matrix:
+        # All three are required. The capability files are platform-scoped:
+        # capabilities/default.json applies to macOS only and
+        # capabilities/cross-platform.json to Windows and Linux, so a
+        # Linux-only check validates just half of the permission surface.
+        platform: [ubuntu-22.04, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -56,8 +66,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          key: ${{ matrix.platform }}
 
       - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -81,7 +93,11 @@ jobs:
         working-directory: ./src-tauri
         run: cargo check
 
-      - name: Show Cargo.lock drift
-        if: always()
-        working-directory: ./src-tauri
-        run: git diff --stat Cargo.lock || true
+      # Cargo.lock cannot be refreshed on the dev machine, so the resolved one
+      # is published here to be committed back.
+      - name: Upload resolved Cargo.lock
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: src-tauri/Cargo.lock
