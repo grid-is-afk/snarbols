@@ -12,6 +12,34 @@ info → Run anyway", macOS right-click → Open).
 > audio comes out of your speakers your microphone hears it too, and every
 > remote turn will appear twice — once as `Speaker`, once as `You`.
 
+## 0a. Installation itself
+
+The installer changed in this branch. Two of those changes could not be verified
+from CI — NSIS compresses its strings, so inspecting the built `.exe` proves
+nothing either way. These two boxes are the actual proof:
+
+**Windows** (`Snarbols_0.1.15_x64-setup.exe`)
+
+- [ ] **No UAC / admin prompt appears** (per-user install). SmartScreen is
+      expected and separate — that one needs a certificate.
+- [ ] Installs on a machine with **no internet connection** (embedded WebView2
+      bootstrapper). If you can't test offline, at least confirm no
+      "downloading WebView2" step appears.
+- [ ] App launches after install
+
+**macOS** (`Snarbols_0.1.15_universal.dmg`)
+
+- [ ] Installs and launches on **Apple Silicon**
+- [ ] Installs and launches on an **Intel Mac** — this is the one that was
+      previously impossible; ask whoever has an Intel machine
+- [ ] The error is the ordinary "developer cannot be verified", **not**
+      "Snarbols is damaged" (ad-hoc signing should have eliminated the latter)
+- [ ] `xattr -dr com.apple.quarantine /Applications/Snarbols.app` then opens
+
+**Both**
+
+- [ ] The version shown in the sidebar reads **0.1.15**, not 0.1.14
+
 ## 0. Base app still works
 
 This branch touched shared code (`useApp`, `useSystemAudio`, `useWindow`,
