@@ -228,15 +228,36 @@ Proposal p.3: auth deferred. SSO ≈ +2 wks, +$8k.
 
 ## Verification
 
-No `cargo` or MSVC on the development machine, so Rust changes are CI-verifiable only.
+No `cargo` or MSVC on the development machine, so Rust changes are CI-verifiable only. Two CI
+workflows were added to close that gap permanently rather than per-feature.
 
-1. **Isolate the native change.** One commit adds `tauri-plugin-fs` and `tauri-plugin-dialog`:
-   Cargo entries, JS deps, and matching permissions in **both** `capabilities/default.json` and
-   `capabilities/cross-platform.json`. Tauri validates capabilities at build time before compile;
-   a plugin added without its permissions fails CI. This is the posthog and updater lesson.
-2. **Everything else is TypeScript**, gated on `tsc && vite build` green locally.
-3. **Tag and build on CI** for all three platforms.
-4. **Nate's real-machine smoke test** on the installer is the final gate.
+**`verify.yml`** — runs on every branch push: typecheck, frontend build, the meeting logic checks,
+and `cargo check` on **all three platforms**. The platform matrix is not optional: the capability
+files are platform-scoped, with `capabilities/default.json` applying to macOS only and
+`cross-platform.json` to Windows and Linux, so a Linux-only check validates half the permission
+surface. `tauri-build` runs from `build.rs` during `cargo check`, which is what catches a plugin
+added without its capability permissions — the posthog and updater failure mode.
+
+**`preview-build.yml`** — triggered by pushing a `preview-*` tag, builds installers for all three
+platforms and uploads them as workflow artifacts. It deliberately does not use `release.yml`,
+which auto-publishes and would put a release on the repo that reads as the next official version
+before the branch is merged or verified.
+
+Status as of 2026-08-09:
+
+| Check | Result |
+|---|---|
+| `tsc && vite build` | green |
+| `npm run check:meeting` (30 assertions) | green |
+| `cargo check` — Linux | green |
+| `cargo check` — macOS (validates `default.json`) | green |
+| `cargo check` — Windows | green |
+| Installers built | see `preview-meeting-1` artifacts |
+| **Real-machine smoke test** | **outstanding — the final gate** |
+
+`Cargo.lock` was regenerated in CI and committed. It adds the two new plugins and prunes entries
+left stale since the posthog, updater and dotenv removals, which nobody could refresh without
+cargo locally.
 
 ### Dependency
 
