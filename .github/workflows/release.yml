@@ -53,8 +53,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macos-latest is Apple Silicon: a default build is aarch64-only and
+          # will not launch on an Intel Mac at all. Universal is required for
+          # the release to be installable by the whole team.
           - platform: macos-latest
-            args: ""
+            args: "--target universal-apple-darwin"
           - platform: ubuntu-22.04
             args: ""
           - platform: windows-latest
@@ -70,6 +73,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -94,6 +99,17 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing. All optional: with no secrets configured the macOS build
+          # falls back to an ad-hoc signature ("-"), which is what stops macOS
+          # refusing an arm64 binary outright as "damaged". Adding a real
+          # Developer ID plus the notarisation secrets below removes the
+          # Gatekeeper prompt entirely, with no further code changes.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}

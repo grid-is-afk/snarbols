@@ -12,7 +12,12 @@ Download the installer for your platform from the private repo's
 
 ## Windows
 
-Files: `Snarbols_<version>_x64-setup.exe` (recommended) or `Snarbols_<version>_x64_en-US.msi`.
+Files: `Snarbols_<version>_x64-setup.exe` (**recommended**) or
+`Snarbols_<version>_x64_en-US.msi`.
+
+Use the `-setup.exe`. It installs **for your user only**, so it needs no admin rights and raises
+no UAC prompt, and it has the WebView2 runtime embedded, so it works on a machine with no
+internet or with downloads locked down.
 
 1. Double-click the installer.
 2. Windows SmartScreen shows **"Windows protected your PC."**
@@ -23,17 +28,20 @@ Files: `Snarbols_<version>_x64-setup.exe` (recommended) or `Snarbols_<version>_x
 > If **Run anyway** doesn't appear, right-click the file → **Properties** → check **Unblock** at
 > the bottom → **OK**, then re-run.
 
+> The SmartScreen prompt is the only step left, and it needs a paid code-signing certificate to
+> remove. See `docs/CODE-SIGNING.md`.
+
 ---
 
-## macOS  (Apple Silicon only — M1/M2/M3/M4)
+## macOS  (Apple Silicon **and** Intel)
 
-File: `Snarbols_<version>_aarch64.dmg`. **There is no Intel (x86) macOS build yet** — if your Mac
-is Intel-based, tell the person who sent you this; the app won't run.
+File: `Snarbols_<version>_universal.dmg` — a universal binary that runs natively on both Apple
+Silicon (M1/M2/M3/M4) and Intel Macs. No separate download, nothing to choose.
 
 1. Open the `.dmg` and drag **Snarbols** into **Applications**.
-2. macOS will say **"Snarbols is damaged and can't be opened"** (or "developer cannot be verified").
-   The app is **not** damaged — this is just macOS blocking an app that isn't signed with a paid
-   Apple certificate yet.
+2. macOS will say **"developer cannot be verified"** (or, on some setups, "Snarbols is damaged").
+   The app is **not** damaged — macOS is blocking an app that isn't signed with a paid Apple
+   certificate yet.
 3. **The fix (required for the "damaged" message — right-click → Open does NOT work for this one):**
    open **Terminal** (Applications → Utilities → Terminal) and run:
    ```bash
